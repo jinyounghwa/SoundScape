@@ -7,6 +7,7 @@ import { MasterVolume } from './components/MasterVolume';
 import { SoundLibrary } from './components/SoundLibrary';
 import { Visualizer } from './components/Visualizer';
 import { SavePresetModal } from './components/SavePresetModal';
+import { ThemeToggle } from './components/ThemeToggle';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { useTimer } from './hooks/useTimer';
 import type { Preset, SoundType } from './types';
@@ -53,10 +54,13 @@ function App() {
   return (
     <div className="min-h-screen bg-background text-text">
       <div className="container mx-auto px-4 py-6 max-w-6xl">
-        <header className="text-center mb-6">
+        <header className="text-center mb-6 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-primary mb-1">SoundScape</h1>
-          <p className="text-sm text-text-muted">Programmatic White Noise Generator</p>
+          <ThemeToggle />
         </header>
+        <div className="text-center mb-6">
+          <p className="text-sm text-text-muted">Programmatic White Noise Generator</p>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
