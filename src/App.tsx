@@ -52,7 +52,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handlePlayPause]);
 
-  const handleAddSound = (type: SoundType) => {
+  const handleAddSound = async (type: SoundType) => {
     if (audio.layers.length >= 5) {
       showToast('Maximum 5 layers reached. Remove a layer first.', 'info');
       return;
@@ -61,10 +61,11 @@ function App() {
       showToast(`${type} is already in your mix`, 'info');
       return;
     }
-    addLayer({ type, volume: 0.5, enabled: true });
     if (!audio.isPlaying) {
-      play().then(() => setIsPlaying(true));
+      await play();
+      setIsPlaying(true);
     }
+    addLayer({ type, volume: 0.5, enabled: true });
   };
 
   const handleRemoveLayer = (index: number) => {
@@ -85,17 +86,18 @@ function App() {
     showToast('All layers cleared');
   };
 
-  const handlePresetSelect = (preset: Preset) => {
+  const handlePresetSelect = async (preset: Preset) => {
     const count = audio.layers.length;
     for (let i = 0; i < count; i++) {
       removeLayer(0);
     }
+    if (!audio.isPlaying) {
+      await play();
+      setIsPlaying(true);
+    }
     preset.layers.forEach((layer) => {
       addLayer(layer);
     });
-    if (!audio.isPlaying) {
-      play().then(() => setIsPlaying(true));
-    }
     showToast(`Loaded "${preset.name}"`);
   };
 

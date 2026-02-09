@@ -49,6 +49,11 @@ export class MixerController {
       return;
     }
 
+    // Resume AudioContext if suspended (critical for mobile web)
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+
     let source: AudioBufferSourceNode = this.audioContext.createBufferSource();
     let buffer: AudioBuffer;
 
