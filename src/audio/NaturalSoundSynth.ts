@@ -2,11 +2,9 @@ import type { SoundType } from '../types';
 
 export class NaturalSoundSynth {
   private audioContext: AudioContext;
-  private noiseGenerator: import('./NoiseGenerator').NoiseGenerator;
 
   constructor(audioContext: AudioContext) {
     this.audioContext = audioContext;
-    this.noiseGenerator = new (require('./NoiseGenerator').NoiseGenerator)(audioContext);
   }
 
   createRain(): AudioNode {

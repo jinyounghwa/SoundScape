@@ -21,8 +21,10 @@ interface AppState {
   };
   timer: TimerState;
   pomodoroConfig: PomodoroConfig;
+  settings: Settings;
   setTimerState: (state: Partial<TimerState>) => void;
   setPomodoroConfig: (config: Partial<PomodoroConfig>) => void;
+  setSettings: (settings: Partial<Settings>) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -89,11 +91,19 @@ export const useStore = create<AppState>()(
         sessionsBeforeLongBreak: 4,
         autoSwitchPreset: false,
       },
+      settings: {
+        theme: 'dark',
+        visualizerEnabled: true,
+        notificationSound: true,
+      },
       setTimerState: (newState) => set((state) => ({
         timer: { ...state.timer, ...newState },
       })),
       setPomodoroConfig: (newConfig) => set((state) => ({
         pomodoroConfig: { ...state.pomodoroConfig, ...newConfig },
+      })),
+      setSettings: (newSettings) => set((state) => ({
+        settings: { ...state.settings, ...newSettings },
       })),
     }),
     {
@@ -101,6 +111,7 @@ export const useStore = create<AppState>()(
       partialize: (state) => ({
         presets: state.presets,
         pomodoroConfig: state.pomodoroConfig,
+        settings: state.settings,
       }),
     }
   )

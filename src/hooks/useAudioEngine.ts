@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { MixerController } from '../audio/MixerController';
 import { useStore } from '../store';
-import type { SoundLayer } from '../types';
 
 export function useAudioEngine() {
   const mixerRef = useRef<MixerController | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const { audio, presets, setTimerState } = useStore();
+  const { audio } = useStore();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {

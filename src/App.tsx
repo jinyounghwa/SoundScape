@@ -4,12 +4,15 @@ import { PresetBrowser } from './components/PresetBrowser';
 import { TimerPanel } from './components/TimerPanel';
 import { MasterVolume } from './components/MasterVolume';
 import { SoundLibrary } from './components/SoundLibrary';
+import { Visualizer } from './components/Visualizer';
 import { useAudioEngine } from './hooks/useAudioEngine';
+import { useTimer } from './hooks/useTimer';
 import type { Preset, SoundType } from './types';
 
 function App() {
-  const { audio, audio: { setIsPlaying, addLayer, updateLayerVolume, toggleLayer, removeLayer } } = useStore();
+  const { audio, audio: { setIsPlaying, addLayer, updateLayerVolume, toggleLayer, removeLayer }, settings, setSettings } = useStore();
   const { play, stop, isReady } = useAudioEngine();
+  useTimer();
 
   const handlePlayPause = async () => {
     if (audio.isPlaying) {
@@ -80,6 +83,8 @@ function App() {
               <MasterVolume />
             </div>
 
+            <Visualizer />
+
             <div className="bg-card rounded-2xl p-6 shadow-xl">
               <h2 className="text-lg font-semibold mb-4">Active Sounds</h2>
               {audio.layers.length === 0 ? (
@@ -109,6 +114,30 @@ function App() {
           <div className="space-y-6">
             <PresetBrowser onSelectPreset={handlePresetSelect} />
             <TimerPanel />
+
+            <div className="bg-card rounded-xl p-4">
+              <h3 className="text-sm font-medium mb-3">Settings</h3>
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.visualizerEnabled}
+                    onChange={(e) => setSettings({ visualizerEnabled: e.target.checked })}
+                    className="w-4 h-4 rounded"
+                  />
+                  <span className="text-sm">Show Visualizer</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.notificationSound}
+                    onChange={(e) => setSettings({ notificationSound: e.target.checked })}
+                    className="w-4 h-4 rounded"
+                  />
+                  <span className="text-sm">Timer Sounds</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -1,6 +1,5 @@
-import type { SoundType, SoundLayer } from '../types';
+import type { SoundType } from '../types';
 import { NoiseGenerator } from './NoiseGenerator';
-import { NaturalSoundSynth } from './NaturalSoundSynth';
 
 interface LayerNode {
   source: AudioBufferSourceNode;
@@ -13,7 +12,6 @@ export class MixerController {
   private masterGain: GainNode;
   private layers: Map<string, LayerNode> = new Map();
   private noiseGenerator: NoiseGenerator;
-  private naturalSynth: NaturalSoundSynth;
   private analyser: AnalyserNode | null = null;
 
   constructor(audioContext: AudioContext) {
@@ -21,7 +19,6 @@ export class MixerController {
     this.masterGain = audioContext.createGain();
     this.masterGain.connect(audioContext.destination);
     this.noiseGenerator = new NoiseGenerator(audioContext);
-    this.naturalSynth = new NaturalSoundSynth(audioContext);
   }
 
   enableAnalyser(): AnalyserNode {

@@ -1,7 +1,7 @@
 import { useStore } from '../store';
 
 export function MasterVolume() {
-  const { audio, setMasterVolume } = useStore();
+  const { audio, audio: { setMasterVolume } } = useStore();
 
   return (
     <div className="bg-card rounded-xl p-4">
