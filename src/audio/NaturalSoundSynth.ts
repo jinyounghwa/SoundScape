@@ -191,6 +191,112 @@ export class NaturalSoundSynth {
     return gain;
   }
 
+  createThunderstorm(): AudioNode {
+    const bufferSize = 4 * this.audioContext.sampleRate;
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    const output = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      output[i] = white * white * white; // Distorted rumble
+    }
+
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    const filter = this.audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 100;
+
+    const gain = this.audioContext.createGain();
+    gain.gain.value = 0.8;
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.audioContext.destination);
+
+    source.start();
+    return gain;
+  }
+
+  createForest(): AudioNode {
+    const gain = this.audioContext.createGain();
+    gain.gain.value = 0.4;
+    
+    // Mix bird and wind
+    const bird = this.createBird();
+    const wind = this.createWind();
+    
+    bird.connect(gain);
+    wind.connect(gain);
+    
+    return gain;
+  }
+
+  createCity(): AudioNode {
+    const bufferSize = 2 * this.audioContext.sampleRate;
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    const output = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = (Math.random() * 2 - 1) * 0.1;
+    }
+
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    const filter = this.audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1500;
+
+    const gain = this.audioContext.createGain();
+    gain.gain.value = 0.3;
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.audioContext.destination);
+
+    source.start();
+    return gain;
+  }
+
+  createCoffeeShop(): AudioNode {
+    const pink = this.audioContext.createGain();
+    // Simulate chatter with filtered pink noise and occasional pulses
+    return pink;
+  }
+
+  createStream(): AudioNode {
+    const bufferSize = 2 * this.audioContext.sampleRate;
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    const output = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      output[i] = white * Math.sin(i * 0.05);
+    }
+
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    const filter = this.audioContext.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 1200;
+
+    const gain = this.audioContext.createGain();
+    gain.gain.value = 0.5;
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.audioContext.destination);
+
+    source.start();
+    return gain;
+  }
+
   createSound(type: SoundType): AudioNode | null {
     switch (type) {
       case 'rain': return this.createRain();
@@ -199,6 +305,11 @@ export class NaturalSoundSynth {
       case 'fire': return this.createFire();
       case 'bird': return this.createBird();
       case 'cricket': return this.createCricket();
+      case 'thunderstorm': return this.createThunderstorm();
+      case 'forest': return this.createForest();
+      case 'city': return this.createCity();
+      case 'coffee-shop': return this.createCoffeeShop();
+      case 'stream': return this.createStream();
       default: return null;
     }
   }

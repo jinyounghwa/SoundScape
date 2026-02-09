@@ -1,4 +1,5 @@
 import type { SoundType } from '../types';
+import { Icons } from './Icons';
 
 interface SoundCardProps {
   type: SoundType;
@@ -7,65 +8,138 @@ interface SoundCardProps {
   enabled: boolean;
   onVolumeChange: (volume: number) => void;
   onToggle: () => void;
+  onRemove: () => void;
 }
+
+const SOUND_ICONS: Record<SoundType, React.ReactNode> = {
+  white: <Icons.Noise size={18} />,
+  pink: <Icons.Noise size={18} />,
+  brown: <Icons.Noise size={18} />,
+  rain: <Icons.Rain size={18} />,
+  thunderstorm: <Icons.Storm size={18} />,
+  wind: <Icons.Wind size={18} />,
+  wave: <Icons.Waves size={18} />,
+  fire: <Icons.Fire size={18} />,
+  bird: <Icons.Bird size={18} />,
+  cricket: <Icons.Bird size={18} />,
+  forest: <Icons.Nature size={18} />,
+  city: <Icons.City size={18} />,
+  'coffee-shop': <Icons.Cafe size={18} />,
+  stream: <Icons.Nature size={18} />,
+};
 
 const SOUND_COLORS: Record<SoundType, string> = {
   white: '#6366F1',
   pink: '#8B5CF6',
   brown: '#06B6D4',
   rain: '#3B82F6',
+  thunderstorm: '#6366F1',
   wind: '#A855F7',
   wave: '#06B6D4',
   fire: '#F97316',
   bird: '#22C55E',
   cricket: '#84CC16',
+  forest: '#10B981',
+  city: '#8B5CF6',
+  'coffee-shop': '#D97706',
+  stream: '#3B82F6',
+};
+
+const SOUND_LABELS: Record<SoundType, string> = {
+  white: 'White Noise',
+  pink: 'Pink Noise',
+  brown: 'Brown Noise',
+  rain: 'Rain',
+  thunderstorm: 'Thunder',
+  wind: 'Wind',
+  wave: 'Ocean Waves',
+  fire: 'Campfire',
+  bird: 'Birdsong',
+  cricket: 'Crickets',
+  forest: 'Forest',
+  city: 'City Hum',
+  'coffee-shop': 'Cafe',
+  stream: 'Stream',
 };
 
 export function SoundCard({
   type,
-  name,
+  name: _name,
   volume,
   enabled,
   onVolumeChange,
   onToggle,
+  onRemove,
 }: SoundCardProps) {
   const color = SOUND_COLORS[type];
+  const label = SOUND_LABELS[type] || _name;
 
   return (
     <div
-      className={`bg-card rounded-xl p-4 transition-all ${
-        enabled ? 'ring-2 ring-primary shadow-lg' : 'opacity-60'
+      className={`relative group rounded-2xl p-5 transition-all ${
+        enabled
+          ? 'glass-heavy shadow-lg'
+          : 'glass opacity-50'
       }`}
-      onClick={onToggle}
-      role="button"
-      tabIndex={0}
-      onKeyPress={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          onToggle();
-        }
+      style={{
+        borderLeft: enabled ? `3px solid ${color}` : '3px solid transparent',
       }}
     >
+      {/* Remove button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-red-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg cursor-pointer z-10"
+        aria-label="Remove layer"
+      >
+        <Icons.Clear size={12} />
+      </button>
+
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <div
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: color }}
-          />
-          <span className="font-medium">{name}</span>
+            className="w-9 h-9 rounded-lg flex items-center justify-center"
+            style={{
+              background: enabled
+                ? `linear-gradient(135deg, ${color}, ${color}AA)`
+                : `${color}30`,
+            }}
+          >
+            {SOUND_ICONS[type]}
+          </div>
+          <div>
+            <span className="font-semibold text-sm block leading-tight">{label}</span>
+            <span className="text-[10px] text-text-muted">
+              {enabled ? `${Math.round(volume * 100)}% vol` : 'Muted'}
+            </span>
+          </div>
         </div>
-        <div
-          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-            enabled ? 'border-primary' : 'border-gray-600'
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          className={`w-11 h-6 rounded-full transition-all relative cursor-pointer ${
+            enabled ? '' : 'bg-slate-200 dark:bg-slate-700'
           }`}
+          style={{
+            background: enabled ? `linear-gradient(90deg, ${color}, ${color}CC)` : undefined,
+          }}
+          aria-label={enabled ? 'Mute layer' : 'Unmute layer'}
         >
-          {enabled && (
-            <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-          )}
-        </div>
+          <div
+            className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all ${
+              enabled ? 'right-0.5' : 'left-0.5'
+            }`}
+          />
+        </button>
       </div>
 
       {enabled && (
-        <div className="mt-3">
+        <div className="space-y-1.5">
           <input
             type="range"
             min="0"
@@ -75,14 +149,17 @@ export function SoundCard({
               e.stopPropagation();
               onVolumeChange(Number(e.target.value) / 100);
             }}
-            className="w-full"
-            style={{
-              background: `linear-gradient(to right, ${color} ${volume * 100}%, rgba(99, 102, 241, 0.2) ${volume * 100}%)`,
-            }}
+            className="w-full cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
           />
-          <div className="flex justify-between mt-1 text-xs text-text-muted">
-            <span>Vol</span>
-            <span>{Math.round(volume * 100)}%</span>
+          <div className="flex justify-between items-center text-[10px]">
+            <span className="text-text-muted">Volume</span>
+            <span
+              className="font-mono font-bold px-2 py-0.5 rounded"
+              style={{ background: `${color}20`, color }}
+            >
+              {Math.round(volume * 100)}%
+            </span>
           </div>
         </div>
       )}

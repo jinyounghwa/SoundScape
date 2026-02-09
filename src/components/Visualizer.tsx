@@ -1,43 +1,36 @@
 import { useRef, useEffect, useState } from 'react';
 import { useStore } from '../store';
+import { Icons } from './Icons';
 
 interface VisualizerProps {
   width?: number;
   height?: number;
+  getAnalyser: () => AnalyserNode | null;
 }
 
-export function Visualizer({ width = 600, height = 200 }: VisualizerProps) {
+export function Visualizer({ width = 600, height = 200, getAnalyser }: VisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { audio, settings } = useStore();
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!settings.visualizerEnabled) return;
-
-    const initAnalyser = async () => {
-      try {
-        const { MixerController } = await import('../audio/MixerController');
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        const audioContext = new AudioContextClass();
-        const mixer = new MixerController(audioContext);
-        const analyserNode = mixer.enableAnalyser();
-        setAnalyser(analyserNode);
-      } catch (error) {
-        console.error('Failed to initialize analyser:', error);
-      }
-    };
-
-    if (audio.isPlaying) {
-      initAnalyser();
+    if (!settings.visualizerEnabled || !audio.isPlaying) {
+      setAnalyser(null);
+      return;
     }
 
-    return () => {
-      if (animationRef.current !== null) {
-        cancelAnimationFrame(animationRef.current);
+    const checkAnalyser = () => {
+      const node = getAnalyser();
+      if (node) {
+        setAnalyser(node);
+      } else {
+        setTimeout(checkAnalyser, 100);
       }
     };
-  }, [audio.isPlaying, settings.visualizerEnabled]);
+
+    checkAnalyser();
+  }, [audio.isPlaying, settings.visualizerEnabled, getAnalyser]);
 
   useEffect(() => {
     if (!analyser || !settings.visualizerEnabled) return;
@@ -59,7 +52,7 @@ export function Visualizer({ width = 600, height = 200 }: VisualizerProps) {
 
       analyser.getByteFrequencyData(dataArray);
 
-      ctx.fillStyle = 'rgba(15, 15, 26, 0.2)';
+      ctx.fillStyle = settings.theme === 'dark' ? 'rgba(15, 15, 26, 0.2)' : 'rgba(241, 245, 249, 0.2)';
       ctx.fillRect(0, 0, width, height);
 
       x = 0;
@@ -69,9 +62,15 @@ export function Visualizer({ width = 600, height = 200 }: VisualizerProps) {
         barHeight = (value / 255) * height;
 
         const gradient = ctx.createLinearGradient(0, height - barHeight, 0, height);
-        gradient.addColorStop(0, '#6366F1');
-        gradient.addColorStop(0.5, '#8B5CF6');
-        gradient.addColorStop(1, '#06B6D4');
+        if (settings.theme === 'dark') {
+          gradient.addColorStop(0, '#6366F1');
+          gradient.addColorStop(0.5, '#8B5CF6');
+          gradient.addColorStop(1, '#06B6D4');
+        } else {
+          gradient.addColorStop(0, '#4F46E5');
+          gradient.addColorStop(0.5, '#7C3AED');
+          gradient.addColorStop(1, '#0891B2');
+        }
 
         ctx.fillStyle = gradient;
 
@@ -90,20 +89,35 @@ export function Visualizer({ width = 600, height = 200 }: VisualizerProps) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [analyser, settings.visualizerEnabled, width, height]);
+  }, [analyser, settings.visualizerEnabled, settings.theme, width, height]);
 
   if (!settings.visualizerEnabled || !audio.isPlaying) {
     return null;
   }
 
   return (
-    <div className="w-full flex justify-center my-6">
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        className="rounded-lg"
-      />
+    <div className="glass-heavy rounded-3xl p-8 shadow-xl overflow-hidden relative card-hover">
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary to-accent"></div>
+
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Icons.Visualizer className="text-primary" />
+          Audio Spectrum
+        </h2>
+        <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-accent/20 text-accent animate-pulse uppercase tracking-wider">
+          Live
+        </span>
+      </div>
+
+      <div className="w-full flex justify-center rounded-2xl overflow-hidden" 
+           style={{ background: settings.theme === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.05)' }}>
+        <canvas
+          ref={canvasRef}
+          width={width}
+          height={height}
+          className="w-full"
+        />
+      </div>
     </div>
   );
 }

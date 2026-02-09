@@ -23,9 +23,9 @@ export class NoiseGenerator {
     const output = buffer.getChannelData(0);
 
     let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    const white = Math.random() * 2 - 1;
 
     for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
       b0 = 0.99886 * b0 + white * 0.0555179;
       b1 = 0.99332 * b1 + white * 0.0750759;
       b2 = 0.96900 * b2 + white * 0.1538520;

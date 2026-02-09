@@ -8,15 +8,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Dark mode colors
-        background: '#0F0F1A',
-        card: '#1A1A2E',
-        primary: '#6366F1', // Indigo - Focus
-        secondary: '#8B5CF6', // Violet - Sleep
-        accent: '#06B6D4', // Cyan - Relax
-        text: '#E2E8F0',
-        textMuted: '#94A3B8',
-      }
+        background: 'var(--background)',
+        card: 'var(--card)',
+        primary: 'var(--primary)',
+        secondary: 'var(--secondary)',
+        accent: 'var(--accent)',
+        text: 'var(--text)',
+        'text-muted': 'var(--text-muted)',
+      },
+      fontFamily: {
+        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+        mono: ['Space Mono', 'monospace'],
+      },
+      animation: {
+        'float': 'float 6s ease-in-out infinite',
+        'pulse-glow': 'pulse-glow 3s ease-in-out infinite',
+        'shimmer': 'shimmer 2s infinite',
+      },
     },
   },
   plugins: [],

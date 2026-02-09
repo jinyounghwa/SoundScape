@@ -3,22 +3,33 @@ export type SoundType =
   | 'pink'
   | 'brown'
   | 'rain'
+  | 'thunderstorm'
   | 'wind'
   | 'wave'
   | 'fire'
   | 'bird'
-  | 'cricket';
+  | 'cricket'
+  | 'forest'
+  | 'city'
+  | 'coffee-shop'
+  | 'stream';
 
 export interface SoundLayer {
   type: SoundType;
   volume: number;
   enabled: boolean;
+  url?: string;
   params?: Record<string, number>;
 }
+
+export type PresetCategory = 'focus' | 'sleep' | 'relax' | 'nature' | 'custom';
 
 export interface Preset {
   id: string;
   name: string;
+  emoji?: string;
+  description?: string;
+  category?: PresetCategory;
   layers: SoundLayer[];
   createdAt: number;
   isDefault: boolean;
@@ -43,7 +54,7 @@ export interface TimerState {
 }
 
 export interface Settings {
-  theme: 'dark' | 'light';
+  theme: 'dark';
   visualizerEnabled: boolean;
   notificationSound: boolean;
 }

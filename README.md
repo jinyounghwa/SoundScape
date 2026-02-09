@@ -24,7 +24,6 @@
 
 ### UI/UX
 - **오디오 비주얼라이저**: AnalyserNode + Canvas 2D 실시간 주파수 시각화
-- **다크/라이트 모드**: 테마 전환 지원
 - **글래스모피즘 디자인**: 반투명 카드 기반 프리미엄 UI
 - **토스트 알림**: 사용자 액션에 대한 즉각적 피드백
 - **키보드 단축키**: Space 재생/정지
@@ -40,7 +39,7 @@
 | 상태관리 | Zustand + LocalStorage 영속화 |
 | 빌드 | Vite |
 | 테스트 | Vitest + Testing Library |
-| 배포 | Vercel |
+| 배포 | netlify |
 
 ## 아키텍처
 

@@ -35,19 +35,25 @@ export function useAudioEngine() {
 
     mixer.setMasterVolume(audio.masterVolume);
 
-    audio.layers.forEach((layer, index) => {
-      const layerId = `layer-${index}`;
+    const syncLayers = async () => {
+      for (let i = 0; i < audio.layers.length; i++) {
+        const layer = audio.layers[i];
+        if (!layer) continue;
+        const layerId = `layer-${i}`;
 
-      if (layer.enabled) {
-        if (!mixer['layers'].has(layerId)) {
-          mixer.addLayer(layerId, layer.type, layer.volume);
+        if (layer.enabled) {
+          if (!mixer['layers'].has(layerId)) {
+            await mixer.addLayer(layerId, layer.type, layer.volume, layer.url);
+          } else {
+            mixer.setLayerVolume(layerId, layer.volume);
+          }
         } else {
-          mixer.setLayerVolume(layerId, layer.volume);
+          mixer.removeLayer(layerId);
         }
-      } else {
-        mixer.removeLayer(layerId);
       }
-    });
+    };
+
+    syncLayers();
 
     mixer['layers'].forEach((_, id) => {
       const index = parseInt(id.replace('layer-', ''));
@@ -61,11 +67,16 @@ export function useAudioEngine() {
     if (audioContextRef.current?.state === 'suspended') {
       await audioContextRef.current.resume();
     }
+    mixerRef.current?.enableAnalyser();
   };
 
   const stop = () => {
     mixerRef.current?.stopAll();
   };
 
-  return { play, stop, isReady };
+  const getAnalyser = () => {
+    return mixerRef.current?.getAnalyser() || null;
+  };
+
+  return { play, stop, isReady, getAnalyser };
 }
