@@ -7,7 +7,7 @@ import { MasterVolume } from './components/MasterVolume';
 import { SoundLibrary } from './components/SoundLibrary';
 import { Visualizer } from './components/Visualizer';
 import { SavePresetModal } from './components/SavePresetModal';
-import { Toast } from '@/components/Toast';
+import { Toast } from './components/Toast';
 import { Icons } from './components/Icons';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { useTimer } from './hooks/useTimer';
