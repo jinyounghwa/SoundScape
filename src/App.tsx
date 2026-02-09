@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useStore } from './store';
 import { SoundCard } from './components/SoundCard';
 import { PresetBrowser } from './components/PresetBrowser';
@@ -5,6 +6,7 @@ import { TimerPanel } from './components/TimerPanel';
 import { MasterVolume } from './components/MasterVolume';
 import { SoundLibrary } from './components/SoundLibrary';
 import { Visualizer } from './components/Visualizer';
+import { SavePresetModal } from './components/SavePresetModal';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { useTimer } from './hooks/useTimer';
 import type { Preset, SoundType } from './types';
@@ -13,6 +15,8 @@ function App() {
   const { audio, audio: { setIsPlaying, addLayer, updateLayerVolume, toggleLayer, removeLayer }, settings, setSettings } = useStore();
   const { play, stop, isReady } = useAudioEngine();
   useTimer();
+
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
 
   const handlePlayPause = async () => {
     if (audio.isPlaying) {
@@ -108,7 +112,15 @@ function App() {
               )}
             </div>
 
-            <SoundLibrary onSelectSound={handleAddSound} />
+            <div className="flex gap-3">
+              <SoundLibrary onSelectSound={handleAddSound} />
+              <button
+                onClick={() => setIsSaveModalOpen(true)}
+                className="flex-1 py-3 bg-accent hover:bg-cyan-700 rounded-lg font-medium transition-colors text-white"
+              >
+                Save Preset
+              </button>
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -140,6 +152,11 @@ function App() {
             </div>
           </div>
         </div>
+
+        <SavePresetModal
+          isOpen={isSaveModalOpen}
+          onClose={() => setIsSaveModalOpen(false)}
+        />
       </div>
     </div>
   );
