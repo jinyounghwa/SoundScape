@@ -13,12 +13,41 @@ export class MixerController {
   private layers: Map<string, LayerNode> = new Map();
   private noiseGenerator: NoiseGenerator;
   private analyser: AnalyserNode | null = null;
+  private isUnlocked: boolean = false;
 
   constructor(audioContext: AudioContext) {
     this.audioContext = audioContext;
     this.masterGain = audioContext.createGain();
     this.masterGain.connect(audioContext.destination);
     this.noiseGenerator = new NoiseGenerator(audioContext);
+  }
+
+  /**
+   * Unlock AudioContext for iOS Safari
+   * This "warms up" the audio context by playing a silent buffer
+   * Must be called from a user interaction handler
+   */
+  async unlockAudioContext(): Promise<void> {
+    if (this.isUnlocked) return;
+
+    try {
+      // Resume the context if suspended
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+
+      // Create and play a silent buffer to unlock iOS
+      const buffer = this.audioContext.createBuffer(1, 1, 22050);
+      const source = this.audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.audioContext.destination);
+      source.start(0);
+
+      this.isUnlocked = true;
+      console.log('AudioContext unlocked successfully');
+    } catch (error) {
+      console.error('Failed to unlock AudioContext:', error);
+    }
   }
 
   enableAnalyser(): AnalyserNode {
@@ -49,7 +78,10 @@ export class MixerController {
       return;
     }
 
-    // Resume AudioContext if suspended (critical for mobile web)
+    // Ensure AudioContext is unlocked (critical for mobile web)
+    await this.unlockAudioContext();
+
+    // Double-check: Resume AudioContext if still suspended
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
     }

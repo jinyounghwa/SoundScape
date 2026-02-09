@@ -15,7 +15,7 @@ import type { Preset, SoundType } from './types';
 
 function App() {
   const { audio, audio: { setIsPlaying, addLayer, updateLayerVolume, toggleLayer, removeLayer }, settings, setSettings, showToast } = useStore();
-  const { play, stop, isReady, getAnalyser } = useAudioEngine();
+  const { play, stop, isReady, getAnalyser, unlockAudio } = useAudioEngine();
   useTimer();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -25,6 +25,9 @@ function App() {
   }, []);
 
   const handlePlayPause = useCallback(async () => {
+    // Unlock audio on first interaction
+    await unlockAudio();
+
     if (audio.isPlaying) {
       stop();
       setIsPlaying(false);
@@ -36,7 +39,7 @@ function App() {
       await play();
       setIsPlaying(true);
     }
-  }, [audio.isPlaying, audio.layers.length, play, stop, setIsPlaying, showToast]);
+  }, [audio.isPlaying, audio.layers.length, play, stop, setIsPlaying, showToast, unlockAudio]);
 
   // Keyboard shortcut: Space to play/pause
   useEffect(() => {
@@ -53,6 +56,9 @@ function App() {
   }, [handlePlayPause]);
 
   const handleAddSound = async (type: SoundType) => {
+    // Unlock audio on first interaction
+    await unlockAudio();
+
     if (audio.layers.length >= 5) {
       showToast('Maximum 5 layers reached. Remove a layer first.', 'info');
       return;
@@ -87,6 +93,9 @@ function App() {
   };
 
   const handlePresetSelect = async (preset: Preset) => {
+    // Unlock audio on first interaction
+    await unlockAudio();
+
     const count = audio.layers.length;
     for (let i = 0; i < count; i++) {
       removeLayer(0);

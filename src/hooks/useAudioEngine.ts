@@ -64,10 +64,17 @@ export function useAudioEngine() {
   }, [audio.layers, audio.masterVolume, isReady]);
 
   const play = async () => {
+    // Unlock AudioContext for iOS Safari (must be from user interaction)
+    await mixerRef.current?.unlockAudioContext();
+
     if (audioContextRef.current?.state === 'suspended') {
       await audioContextRef.current.resume();
     }
     mixerRef.current?.enableAnalyser();
+  };
+
+  const unlockAudio = async () => {
+    await mixerRef.current?.unlockAudioContext();
   };
 
   const stop = () => {
@@ -78,5 +85,5 @@ export function useAudioEngine() {
     return mixerRef.current?.getAnalyser() || null;
   };
 
-  return { play, stop, isReady, getAnalyser };
+  return { play, stop, isReady, getAnalyser, unlockAudio };
 }
