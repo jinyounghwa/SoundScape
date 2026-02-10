@@ -240,12 +240,48 @@ export function useAudioEngine() {
     // iOS unlock
     unlockiOSAudio(ctx);
 
+    // CRITICAL for iOS: Activate Media Session API to bypass silent mode
+    // This tells iOS that this is media playback (like YouTube/Spotify),
+    // not ambient sound effects, so it will play even with the mute switch on.
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: 'SoundScape',
+          artist: 'Ambient Sound Generator',
+          album: 'Focus & Relaxation',
+        });
+
+        // Set playback state to playing
+        navigator.mediaSession.playbackState = 'playing';
+
+        // Handle media controls
+        navigator.mediaSession.setActionHandler('play', () => {
+          ctx.resume();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          mixerRef.current?.stopAll();
+        });
+      } catch (e) {
+        // MediaSession API not supported or failed — gracefully degrade
+        console.warn('Media Session API not available:', e);
+      }
+    }
+
     // Enable analyser for visualizer
     mixerRef.current?.enableAnalyser();
   }, [getOrCreateAudioContext, resumeAudioContext, unlockiOSAudio]);
 
   const stop = useCallback(() => {
     mixerRef.current?.stopAll();
+
+    // Update Media Session state
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.playbackState = 'paused';
+      } catch (e) {
+        // Ignore
+      }
+    }
   }, []);
 
   const getAnalyser = useCallback(() => {
