@@ -138,18 +138,40 @@ function App() {
               <Icons.Logo className="w-10 h-10 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold mb-2">Welcome to SoundScape</h2>
-              <p className="text-text-muted text-sm">
-                Tap the button below to enable audio playback on your device.
-              </p>
+              <h2 className="text-2xl font-bold mb-3">Welcome to SoundScape</h2>
+              <div className="space-y-4">
+                <div className="glass rounded-xl p-4 border border-amber-500/30 bg-amber-500/5">
+                  <div className="flex items-start gap-3 mb-2">
+                    <span className="text-2xl">🔊</span>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-amber-400 mb-1">모바일 오디오 재생 안내</p>
+                      <p className="text-xs text-text-muted leading-relaxed">
+                        iOS/모바일에서 소리를 들으려면 <span className="font-bold text-amber-300">무음 모드를 해제</span>하고 벨소리 모드로 전환해주세요.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass rounded-xl p-4 border border-blue-500/30 bg-blue-500/5">
+                  <div className="flex items-start gap-3 mb-2">
+                    <span className="text-2xl">🔔</span>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-blue-400 mb-1">Mobile Audio Notice</p>
+                      <p className="text-xs text-text-muted leading-relaxed">
+                        To hear audio on iOS/mobile devices, please <span className="font-bold text-blue-300">disable silent mode</span> and switch to ring mode.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             <button
               onClick={handleIOSStart}
               className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-primary to-secondary hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-lg transition-all transform hover:scale-105 shadow-xl cursor-pointer"
             >
-              Start Audio
+              시작하기 / Start Audio
             </button>
             <p className="text-xs text-text-muted/60">
+              이 단계는 iOS 기기에서 오디오를 정상적으로 재생하기 위해 필요합니다<br/>
               This step is required for audio to work properly on iOS devices
             </p>
           </div>
