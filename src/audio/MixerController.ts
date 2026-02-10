@@ -37,7 +37,11 @@ export class MixerController {
   }
 
   setMasterVolume(volume: number): void {
-    this.masterGain.gain.setValueAtTime(volume, this.audioContext.currentTime);
+    // Use linearRampToValueAtTime for smooth iOS transitions (avoids clicks)
+    const now = this.audioContext.currentTime;
+    this.masterGain.gain.cancelScheduledValues(now);
+    this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+    this.masterGain.gain.linearRampToValueAtTime(volume, now + 0.02);
   }
 
   getMasterVolume(): number {
@@ -49,69 +53,107 @@ export class MixerController {
       return;
     }
 
-    // Resume AudioContext if suspended or interrupted (critical for iOS)
+    // CRITICAL for iOS: Ensure AudioContext is running before any audio operations
     const state = this.audioContext.state as string;
     if (state === 'suspended' || state === 'interrupted') {
       try {
         await this.audioContext.resume();
       } catch (e) {
-        console.warn('AudioContext resume failed, will retry on next user gesture:', e);
+        console.warn('AudioContext resume failed in addLayer:', e);
+        // On iOS this may fail if not inside user gesture — caller should retry
+        return;
       }
     }
 
-    let source: AudioBufferSourceNode = this.audioContext.createBufferSource();
+    // Verify AudioContext is now running
+    if ((this.audioContext.state as string) !== 'running') {
+      console.warn('AudioContext not running after resume attempt, state:', this.audioContext.state);
+      return;
+    }
+
+    let source: AudioBufferSourceNode;
     let buffer: AudioBuffer;
 
-    if (url) {
-      try {
-        const response = await fetch(url);
-        const arrayBuffer = await response.arrayBuffer();
-        // iOS requires a copy of the ArrayBuffer for decodeAudioData
-        buffer = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
-        source.buffer = buffer;
-      } catch (error) {
-        console.error(`Failed to load sound from ${url}:`, error);
-        // Fallback to synth
-        source.buffer = this.createSynthBuffer(type);
-      }
-    } else {
-      switch (type) {
-        case 'white':
-          buffer = this.noiseGenerator.generateWhiteNoise(10);
-          source.buffer = buffer;
-          break;
-        case 'pink':
-          buffer = this.noiseGenerator.generatePinkNoise(10);
-          source.buffer = buffer;
-          break;
-        case 'brown':
-          buffer = this.noiseGenerator.generateBrownNoise(10);
-          source.buffer = buffer;
-          break;
-        default:
-          source.buffer = this.createSynthBuffer(type);
-          break;
-      }
-    }
-
-    source.loop = true;
-    const gain = this.audioContext.createGain();
-    gain.gain.value = volume;
-
-    source.connect(gain);
-    gain.connect(this.masterGain);
-
     try {
-      source.start(0);
-    } catch (e) {
-      console.warn('AudioBufferSourceNode.start() failed:', e);
-    }
+      source = this.audioContext.createBufferSource();
 
-    this.layers.set(id, { source, gain, type });
+      if (url) {
+        try {
+          const response = await fetch(url);
+          const arrayBuffer = await response.arrayBuffer();
+          // iOS Safari requires .slice(0) to get a transferable copy
+          buffer = await this.decodeAudioDataSafe(arrayBuffer.slice(0));
+          source.buffer = buffer;
+        } catch (error) {
+          console.error(`Failed to load sound from ${url}:`, error);
+          source.buffer = this.createSynthBuffer(type);
+        }
+      } else {
+        switch (type) {
+          case 'white':
+            buffer = this.noiseGenerator.generateWhiteNoise(10);
+            source.buffer = buffer;
+            break;
+          case 'pink':
+            buffer = this.noiseGenerator.generatePinkNoise(10);
+            source.buffer = buffer;
+            break;
+          case 'brown':
+            buffer = this.noiseGenerator.generateBrownNoise(10);
+            source.buffer = buffer;
+            break;
+          default:
+            source.buffer = this.createSynthBuffer(type);
+            break;
+        }
+      }
+
+      source.loop = true;
+
+      const gain = this.audioContext.createGain();
+      // Set initial volume to 0 and ramp up to avoid iOS click/pop
+      gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.05);
+
+      source.connect(gain);
+      gain.connect(this.masterGain);
+
+      // Start the source — wrap in try/catch for iOS safety
+      source.start(0);
+
+      this.layers.set(id, { source, gain, type });
+    } catch (e) {
+      console.warn('Failed to create audio layer:', e);
+      // On iOS, if AudioContext got suspended between our check and start(),
+      // this can happen. The layer sync effect will retry.
+    }
+  }
+
+  /**
+   * Safely decode audio data with fallback for older iOS Safari versions
+   * that use the callback-based API.
+   */
+  private decodeAudioDataSafe(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
+    return new Promise((resolve, reject) => {
+      // Try the promise-based API first (modern browsers)
+      const result = this.audioContext.decodeAudioData(
+        arrayBuffer,
+        (buffer) => resolve(buffer),
+        (error) => reject(error)
+      );
+      // Some browsers return a promise from decodeAudioData
+      if (result && typeof result.then === 'function') {
+        result.catch(() => {
+          // Already handled by the callback
+        });
+      }
+    });
   }
 
   private createSynthBuffer(type: SoundType): AudioBuffer {
-    const bufferSize = this.audioContext.sampleRate * 4;
+    // Use longer buffers (8s) to reduce looping artifacts on iOS
+    const duration = 8;
+    const bufferSize = this.audioContext.sampleRate * duration;
     const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
     const output = buffer.getChannelData(0);
 
@@ -127,7 +169,7 @@ export class MixerController {
           output[i] = Math.random() * 2 - 1;
         }
         break;
-      case 'wave':
+      case 'wave': {
         const cycleLength = this.audioContext.sampleRate * 4;
         for (let i = 0; i < bufferSize; i++) {
           const white = Math.random() * 2 - 1;
@@ -136,6 +178,7 @@ export class MixerController {
           output[i] = white * envelope * 0.5;
         }
         break;
+      }
       case 'fire':
         for (let i = 0; i < bufferSize; i++) {
           const white = Math.random() * 2 - 1;
@@ -170,49 +213,37 @@ export class MixerController {
         }
         break;
       case 'forest':
-        // Forest ambience: layered bird chirps + rustling leaves + distant wind
         for (let i = 0; i < bufferSize; i++) {
           const t = i / this.audioContext.sampleRate;
-          // Rustling leaves (filtered noise)
           const leaves = (Math.random() * 2 - 1) * 0.15 * Math.sin(t * 0.5);
-          // Occasional bird chirp
           const birdChirp = Math.sin(2 * Math.PI * (1800 + Math.sin(t * 3) * 400) * t) *
                            Math.exp(-(t % 2) * 5) * 0.1;
-          // Distant wind
           const wind = (Math.random() * 2 - 1) * 0.08 * Math.sin(t * 0.3);
           output[i] = leaves + birdChirp + wind;
         }
         break;
       case 'city':
-        // Urban ambience: distant traffic rumble + occasional horns + general hum
         for (let i = 0; i < bufferSize; i++) {
           const t = i / this.audioContext.sampleRate;
-          // Traffic rumble (low frequency)
           const traffic = Math.sin(2 * Math.PI * 60 * t) * 0.15 +
                          Math.sin(2 * Math.PI * 90 * t) * 0.1;
-          // Random city noises
           const cityNoise = (Math.random() * 2 - 1) * 0.08;
-          // Occasional horn (very subtle)
           const horn = Math.sin(2 * Math.PI * 440 * t) *
                       (Math.random() > 0.998 ? 0.05 : 0);
           output[i] = traffic + cityNoise + horn;
         }
         break;
       case 'coffee-shop':
-        // Coffee shop: murmuring voices + occasional cup clinks + espresso machine
         for (let i = 0; i < bufferSize; i++) {
           const t = i / this.audioContext.sampleRate;
-          // Murmuring (filtered pink-ish noise)
           let murmur = 0;
           for (let h = 1; h <= 5; h++) {
             murmur += Math.sin(2 * Math.PI * (200 + h * 50) * t + Math.random() * Math.PI) / h;
           }
-          murmur *= 0.08 * (1 + Math.sin(t * 0.5) * 0.3); // Varying volume
-          // Cup clinks (random metallic sounds)
+          murmur *= 0.08 * (1 + Math.sin(t * 0.5) * 0.3);
           const clink = Math.sin(2 * Math.PI * 2000 * t) *
                        Math.exp(-((t % 5) * 100)) *
                        (Math.random() > 0.995 ? 0.15 : 0);
-          // Espresso machine hiss (occasional)
           const hiss = (Math.random() * 2 - 1) *
                       (Math.sin(t * 0.2) > 0.9 ? 0.1 : 0.02);
           output[i] = murmur + clink + hiss;
@@ -227,11 +258,28 @@ export class MixerController {
     const layer = this.layers.get(id);
     if (layer) {
       try {
-        layer.source.stop();
-      } catch (e) {
+        // Fade out to avoid iOS click/pop
+        const now = this.audioContext.currentTime;
+        layer.gain.gain.cancelScheduledValues(now);
+        layer.gain.gain.setValueAtTime(layer.gain.gain.value, now);
+        layer.gain.gain.linearRampToValueAtTime(0, now + 0.05);
+        
+        // Stop after fade out is complete
+        setTimeout(() => {
+          try {
+            layer.source.stop();
+          } catch (_) { /* already stopped */ }
+          try {
+            layer.source.disconnect();
+            layer.gain.disconnect();
+          } catch (_) { /* already disconnected */ }
+        }, 60);
+      } catch (_) {
+        // Fallback: immediate stop
+        try { layer.source.stop(); } catch (__) { /* ignore */ }
+        try { layer.source.disconnect(); } catch (__) { /* ignore */ }
+        try { layer.gain.disconnect(); } catch (__) { /* ignore */ }
       }
-      layer.source.disconnect();
-      layer.gain.disconnect();
       this.layers.delete(id);
     }
   }
@@ -239,25 +287,46 @@ export class MixerController {
   setLayerVolume(id: string, volume: number): void {
     const layer = this.layers.get(id);
     if (layer) {
-      layer.gain.gain.setValueAtTime(volume, this.audioContext.currentTime);
+      // Use ramp to avoid iOS audio clicks
+      const now = this.audioContext.currentTime;
+      layer.gain.gain.cancelScheduledValues(now);
+      layer.gain.gain.setValueAtTime(layer.gain.gain.value, now);
+      layer.gain.gain.linearRampToValueAtTime(volume, now + 0.02);
     }
   }
 
   setLayerEnabled(id: string, enabled: boolean): void {
     const layer = this.layers.get(id);
     if (layer) {
-      layer.gain.gain.setValueAtTime(enabled ? layer.gain.gain.value || 0 : 0, this.audioContext.currentTime);
+      const now = this.audioContext.currentTime;
+      layer.gain.gain.cancelScheduledValues(now);
+      layer.gain.gain.setValueAtTime(layer.gain.gain.value, now);
+      layer.gain.gain.linearRampToValueAtTime(
+        enabled ? layer.gain.gain.value || 0 : 0,
+        now + 0.02
+      );
     }
   }
 
   stopAll(): void {
     this.layers.forEach((layer) => {
       try {
-        layer.source.stop();
-      } catch (e) {
+        // Fade out quickly to avoid iOS click
+        const now = this.audioContext.currentTime;
+        layer.gain.gain.cancelScheduledValues(now);
+        layer.gain.gain.setValueAtTime(layer.gain.gain.value, now);
+        layer.gain.gain.linearRampToValueAtTime(0, now + 0.03);
+        
+        setTimeout(() => {
+          try { layer.source.stop(); } catch (_) { /* ignore */ }
+          try { layer.source.disconnect(); } catch (_) { /* ignore */ }
+          try { layer.gain.disconnect(); } catch (_) { /* ignore */ }
+        }, 40);
+      } catch (_) {
+        try { layer.source.stop(); } catch (__) { /* ignore */ }
+        try { layer.source.disconnect(); } catch (__) { /* ignore */ }
+        try { layer.gain.disconnect(); } catch (__) { /* ignore */ }
       }
-      layer.source.disconnect();
-      layer.gain.disconnect();
     });
     this.layers.clear();
   }

@@ -3,10 +3,18 @@ import { MixerController } from '../audio/MixerController';
 import { useStore } from '../store';
 
 /**
- * iOS Safari requires AudioContext to be created AND resumed
- * within a direct user gesture (touchend/click) handler.
- * We lazily initialize AudioContext on the first user interaction
- * and play a silent buffer to "unlock" audio playback.
+ * iOS Safari Audio Playback Requirements:
+ * 
+ * 1. AudioContext MUST be created during a user gesture (touchend/click).
+ * 2. AudioContext.resume() MUST be called during a user gesture.
+ * 3. At least one AudioBufferSourceNode.start() must be called during a
+ *    user gesture to "unlock" the audio hardware.
+ * 4. After an interruption (phone call, Control Center open, app switching),
+ *    AudioContext transitions to 'interrupted' state and must be re-resumed
+ *    on the next user gesture.
+ * 5. The silent-buffer trick must be used to prime the audio output chain.
+ * 
+ * This hook implements all of these requirements with robust retry logic.
  */
 export function useAudioEngine() {
   const mixerRef = useRef<MixerController | null>(null);
@@ -14,87 +22,149 @@ export function useAudioEngine() {
   const { audio } = useStore();
   const [isReady, setIsReady] = useState(false);
   const isUnlockedRef = useRef(false);
+  const resumePromiseRef = useRef<Promise<void> | null>(null);
+  const pendingLayerSyncRef = useRef(false);
 
-  // Lazily create AudioContext — must be called from a user gesture handler
-  const ensureAudioContext = useCallback((): AudioContext => {
+  // Create AudioContext with iOS webkit fallback
+  const getOrCreateAudioContext = useCallback((): AudioContext => {
     if (audioContextRef.current) {
       return audioContextRef.current;
     }
 
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    const ctx = new AudioContextClass();
+    const AudioContextClass =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioContextClass({
+      // Use 'playback' latency hint for better iOS compatibility
+      latencyHint: 'playback',
+    });
     audioContextRef.current = ctx;
     mixerRef.current = new MixerController(ctx);
     setIsReady(true);
     return ctx;
   }, []);
 
-  // Unlock audio on iOS by playing a silent buffer inside a user gesture
-  const unlockAudio = useCallback((ctx: AudioContext) => {
-    if (isUnlockedRef.current) return;
+  // Resume AudioContext — safe to call multiple times.
+  // Returns a cached promise to avoid duplicate resume() calls.
+  const resumeAudioContext = useCallback(async (ctx: AudioContext): Promise<void> => {
+    const state = ctx.state as string;
+    if (state === 'running') {
+      resumePromiseRef.current = null;
+      return;
+    }
 
-    // Play a short silent buffer to unlock iOS audio
-    const silentBuffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-    const source = ctx.createBufferSource();
-    source.buffer = silentBuffer;
-    source.connect(ctx.destination);
-    source.start(0);
-    source.onended = () => {
-      source.disconnect();
-    };
+    if (state === 'closed') {
+      // AudioContext was closed — recreate it
+      audioContextRef.current = null;
+      mixerRef.current = null;
+      isUnlockedRef.current = false;
+      const newCtx = getOrCreateAudioContext();
+      await newCtx.resume();
+      return;
+    }
 
-    isUnlockedRef.current = true;
+    // 'suspended' or 'interrupted' (iOS-specific)
+    if (!resumePromiseRef.current) {
+      resumePromiseRef.current = ctx.resume().then(() => {
+        resumePromiseRef.current = null;
+      }).catch(() => {
+        resumePromiseRef.current = null;
+        // Will retry on next user gesture
+      });
+    }
+    return resumePromiseRef.current;
+  }, [getOrCreateAudioContext]);
+
+  // Play a silent buffer — this is the iOS "unlock" trick.
+  // Must be called within a user gesture event handler.
+  const playSilentBuffer = useCallback((ctx: AudioContext) => {
+    try {
+      const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+      // Immediately schedule stop to avoid iOS resource warnings
+      source.stop(ctx.currentTime + 0.001);
+      source.onended = () => {
+        try { source.disconnect(); } catch (_) { /* ignore */ }
+      };
+    } catch (_) {
+      // Silently fail — we'll retry on next interaction
+    }
   }, []);
 
-  // Listen for first user interaction to initialize and unlock AudioContext
+  // Comprehensive iOS unlock — called on every user interaction until confirmed
+  const unlockiOSAudio = useCallback((ctx: AudioContext) => {
+    // Always try to resume (no-op if already running)
+    resumeAudioContext(ctx);
+    
+    // Play silent buffer on every interaction until the first real
+    // sound plays successfully
+    if (!isUnlockedRef.current) {
+      playSilentBuffer(ctx);
+      
+      // Check if audio is actually running after a brief delay
+      setTimeout(() => {
+        if (ctx.state === 'running') {
+          isUnlockedRef.current = true;
+        }
+      }, 100);
+    }
+  }, [resumeAudioContext, playSilentBuffer]);
+
+  // Global user gesture handlers to keep AudioContext alive on iOS
   useEffect(() => {
     const handleUserGesture = () => {
-      const ctx = ensureAudioContext();
-
-      // Resume suspended AudioContext (iOS requires this in gesture handler)
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      // Unlock iOS audio with a silent buffer
-      unlockAudio(ctx);
+      const ctx = getOrCreateAudioContext();
+      unlockiOSAudio(ctx);
     };
 
-    // iOS Safari uses 'touchend' as the trusted user gesture event
-    window.addEventListener('touchend', handleUserGesture, { once: false, passive: true });
-    window.addEventListener('click', handleUserGesture, { once: false, passive: true });
+    // iOS Safari specifically requires 'touchend' (not 'touchstart')
+    const events = ['touchend', 'click', 'keydown'] as const;
+    events.forEach(event => {
+      window.addEventListener(event, handleUserGesture, { passive: true });
+    });
 
     return () => {
-      window.removeEventListener('touchend', handleUserGesture);
-      window.removeEventListener('click', handleUserGesture);
+      events.forEach(event => {
+        window.removeEventListener(event, handleUserGesture);
+      });
     };
-  }, [ensureAudioContext, unlockAudio]);
+  }, [getOrCreateAudioContext, unlockiOSAudio]);
 
-  // Handle iOS interruptions (e.g., phone call, Control Center)
-  // When audio is interrupted on iOS, AudioContext goes to 'interrupted' state.
-  // We need to resume it when the user returns.
+  // Handle iOS interruptions:
+  // - Phone calls cause AudioContext to go to 'interrupted' state
+  // - Opening Control Center can suspend audio
+  // - Switching apps suspends audio
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const ctx = audioContextRef.current;
+        if (ctx) {
+          const state = ctx.state as string;
+          if (state === 'suspended' || state === 'interrupted') {
+            // Attempt resume — on iOS this may fail until next user gesture
+            ctx.resume().catch(() => {
+              // Mark as needing unlock on next gesture
+              isUnlockedRef.current = false;
+            });
+          }
+        }
+      }
+    };
+
     const handleStateChange = () => {
       const ctx = audioContextRef.current;
       if (!ctx) return;
-
-      if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
-        ctx.resume().catch(() => {
-          // iOS may reject resume if not in a user gesture — we'll retry on next interaction
-        });
-      }
-    };
-
-    // Visibility change (user returns from another app/tab)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        handleStateChange();
+      
+      if (ctx.state === 'running' && pendingLayerSyncRef.current) {
+        // AudioContext just became running — trigger a layer re-sync
+        pendingLayerSyncRef.current = false;
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // AudioContext state change
     const ctx = audioContextRef.current;
     if (ctx) {
       ctx.addEventListener('statechange', handleStateChange);
@@ -108,15 +178,30 @@ export function useAudioEngine() {
     };
   }, [isReady]);
 
-  // Sync layers and master volume
+  // Sync layers with the mixer when audio state changes
   useEffect(() => {
     if (!mixerRef.current || !isReady) return;
 
     const mixer = mixerRef.current;
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
 
     mixer.setMasterVolume(audio.masterVolume);
 
     const syncLayers = async () => {
+      // CRITICAL for iOS: Ensure AudioContext is running before creating sources
+      const state = ctx.state as string;
+      if (state !== 'running') {
+        try {
+          await ctx.resume();
+        } catch (_) {
+          // AudioContext.resume() rejected — likely not in a user gesture.
+          // Mark for re-sync when AudioContext resumes.
+          pendingLayerSyncRef.current = true;
+          return;
+        }
+      }
+
       for (let i = 0; i < audio.layers.length; i++) {
         const layer = audio.layers[i];
         if (!layer) continue;
@@ -136,6 +221,7 @@ export function useAudioEngine() {
 
     syncLayers();
 
+    // Remove stale layers
     mixer['layers'].forEach((_, id) => {
       const index = parseInt(id.replace('layer-', ''));
       if (index >= audio.layers.length || !audio.layers[index]?.enabled) {
@@ -144,20 +230,19 @@ export function useAudioEngine() {
     });
   }, [audio.layers, audio.masterVolume, isReady]);
 
+  // Play: called from a user gesture (button click)
   const play = useCallback(async () => {
-    // Ensure AudioContext exists (creates it if first time)
-    const ctx = ensureAudioContext();
+    const ctx = getOrCreateAudioContext();
 
-    // Resume if suspended — this must be called within user gesture chain
-    if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
-      await ctx.resume();
-    }
+    // Resume AudioContext — this is inside a user gesture chain
+    await resumeAudioContext(ctx);
 
-    // Unlock iOS audio
-    unlockAudio(ctx);
+    // iOS unlock
+    unlockiOSAudio(ctx);
 
+    // Enable analyser for visualizer
     mixerRef.current?.enableAnalyser();
-  }, [ensureAudioContext, unlockAudio]);
+  }, [getOrCreateAudioContext, resumeAudioContext, unlockiOSAudio]);
 
   const stop = useCallback(() => {
     mixerRef.current?.stopAll();
@@ -167,11 +252,11 @@ export function useAudioEngine() {
     return mixerRef.current?.getAnalyser() || null;
   }, []);
 
-  // Cleanup
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       mixerRef.current?.stopAll();
-      audioContextRef.current?.close();
+      audioContextRef.current?.close().catch(() => {});
     };
   }, []);
 

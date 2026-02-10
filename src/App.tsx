@@ -29,11 +29,15 @@ function App() {
       stop();
       setIsPlaying(false);
     } else {
+      // CRITICAL for iOS: Call play() FIRST within the user gesture handler.
+      // play() calls AudioContext.resume() which iOS requires in a gesture chain.
+      // Do NOT put any async work before this call.
+      await play();
+      
       if (audio.layers.length === 0) {
         showToast('Add sounds first from the library or select a preset', 'info');
         return;
       }
-      await play();
       setIsPlaying(true);
     }
   }, [audio.isPlaying, audio.layers.length, play, stop, setIsPlaying, showToast]);
@@ -53,6 +57,14 @@ function App() {
   }, [handlePlayPause]);
 
   const handleAddSound = async (type: SoundType) => {
+    // CRITICAL for iOS: Call play() early in the click handler chain.
+    // iOS Safari requires AudioContext.resume() within a synchronous user gesture.
+    // We call play() before validation checks to ensure the gesture chain is intact.
+    if (!audio.isPlaying) {
+      await play();
+      setIsPlaying(true);
+    }
+    
     if (audio.layers.length >= 5) {
       showToast('Maximum 5 layers reached. Remove a layer first.', 'info');
       return;
@@ -60,10 +72,6 @@ function App() {
     if (audio.layers.some(l => l.type === type)) {
       showToast(`${type} is already in your mix`, 'info');
       return;
-    }
-    if (!audio.isPlaying) {
-      await play();
-      setIsPlaying(true);
     }
     addLayer({ type, volume: 0.5, enabled: true });
   };
@@ -87,13 +95,16 @@ function App() {
   };
 
   const handlePresetSelect = async (preset: Preset) => {
-    const count = audio.layers.length;
-    for (let i = 0; i < count; i++) {
-      removeLayer(0);
-    }
+    // CRITICAL for iOS: Call play() first to ensure AudioContext is resumed
+    // within the user gesture handler chain.
     if (!audio.isPlaying) {
       await play();
       setIsPlaying(true);
+    }
+    
+    const count = audio.layers.length;
+    for (let i = 0; i < count; i++) {
+      removeLayer(0);
     }
     preset.layers.forEach((layer) => {
       addLayer(layer);
