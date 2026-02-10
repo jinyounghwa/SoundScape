@@ -49,9 +49,14 @@ export class MixerController {
       return;
     }
 
-    // Resume AudioContext if suspended (critical for mobile web)
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
+    // Resume AudioContext if suspended or interrupted (critical for iOS)
+    const state = this.audioContext.state as string;
+    if (state === 'suspended' || state === 'interrupted') {
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        console.warn('AudioContext resume failed, will retry on next user gesture:', e);
+      }
     }
 
     let source: AudioBufferSourceNode = this.audioContext.createBufferSource();
@@ -61,7 +66,8 @@ export class MixerController {
       try {
         const response = await fetch(url);
         const arrayBuffer = await response.arrayBuffer();
-        buffer = await this.audioContext.decodeAudioData(arrayBuffer);
+        // iOS requires a copy of the ArrayBuffer for decodeAudioData
+        buffer = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
         source.buffer = buffer;
       } catch (error) {
         console.error(`Failed to load sound from ${url}:`, error);
@@ -94,7 +100,12 @@ export class MixerController {
 
     source.connect(gain);
     gain.connect(this.masterGain);
-    source.start();
+
+    try {
+      source.start(0);
+    } catch (e) {
+      console.warn('AudioBufferSourceNode.start() failed:', e);
+    }
 
     this.layers.set(id, { source, gain, type });
   }
