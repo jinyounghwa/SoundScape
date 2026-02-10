@@ -19,10 +19,26 @@ function App() {
   useTimer();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [showIOSPrompt, setShowIOSPrompt] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
+
+    // Detect iOS Safari and Mobile Safari
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                  (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints > 1);
+
+    if (isIOS) {
+      setShowIOSPrompt(true);
+    }
   }, []);
+
+  const handleIOSStart = useCallback(async () => {
+    // CRITICAL: Initialize AudioContext with explicit user gesture
+    await play();
+    setShowIOSPrompt(false);
+    showToast('Audio initialized! You can now play sounds.', 'success');
+  }, [play, showToast]);
 
   const handlePlayPause = useCallback(async () => {
     if (audio.isPlaying) {
@@ -33,7 +49,7 @@ function App() {
       // play() calls AudioContext.resume() which iOS requires in a gesture chain.
       // Do NOT put any async work before this call.
       await play();
-      
+
       if (audio.layers.length === 0) {
         showToast('Add sounds first from the library or select a preset', 'info');
         return;
@@ -114,6 +130,32 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-text relative flex flex-col">
+      {/* iOS Audio Initialization Overlay */}
+      {showIOSPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
+          <div className="glass-heavy rounded-3xl p-8 md:p-12 max-w-md mx-4 text-center space-y-6">
+            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+              <Icons.Logo className="w-10 h-10 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Welcome to SoundScape</h2>
+              <p className="text-text-muted text-sm">
+                Tap the button below to enable audio playback on your device.
+              </p>
+            </div>
+            <button
+              onClick={handleIOSStart}
+              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-primary to-secondary hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-lg transition-all transform hover:scale-105 shadow-xl cursor-pointer"
+            >
+              Start Audio
+            </button>
+            <p className="text-xs text-text-muted/60">
+              This step is required for audio to work properly on iOS devices
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-8 max-w-7xl relative z-10 flex-1">
         {/* Header */}
         <header className="flex items-center justify-between mb-10">
